@@ -29,7 +29,7 @@
 
 pack: sp, unpack: su = string
 :bidirectional = require"ipparse.fun"
-:HKDF = require"crypto.hkdf"
+HKDF = require"crypto.hkdf"
 
 --- Packs a TLS record into a binary string.
 -- Constructs the binary representation of the TLS record.
@@ -63,10 +63,10 @@ parse = (off=1) =>
 -- @tparam string context A string containing the hash of the transcript of the handshake messages.
 -- @tparam number length The desired length in bytes for the derived secret.
 -- @treturn string The derived secret of the specified `length`.
-hkdf_tls13_expand_label = (prk, label, context, length) ->
+tls13_expand_label = (prk, label, context, length) ->
   hkdf = HKDF.new"sha256"
-	hkdf_label_info = pack(">Hs1s1", length, "tls13 " .. label, context)
-	hkdf\expand(prk, hkdf_label_info, length)
+  hkdf_label_info = sp ">Hs1s1", length, "tls13 "..label, context
+  hkdf\expand prk, hkdf_label_info, length
 
 --- TLS Record Types
 -- Provides a mapping of TLS record type codes to their names.
@@ -78,4 +78,4 @@ record_types = bidirectional {
   [0x18]: "heartbeat"
 }
 
-:parse, :pack, :record_types
+:parse, :pack, :record_types, :tls13_expand_label

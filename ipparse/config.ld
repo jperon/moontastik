@@ -28,6 +28,7 @@ file = {
   "l7/tls/handshake/init.moon",
   "l7/tls/init.moon",
   "lib/reassembler.moon",
+  "lib/sh.moon",
   "fun.moon",
 }
 

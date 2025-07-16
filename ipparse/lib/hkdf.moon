@@ -5,31 +5,40 @@ script = debug.getinfo(1,"S").source\sub 2
 path = ";" .. script\match".+/" .. "?.lua"
 package.path ..= path if not package.path\match path
 
-:hmac, :sha256, :hex_to_bin = require"sha2"
+:sha256, :hmac, :hex_to_bin, :bin_to_hex = require"ipparse.lib.sha" -- Require from the new module
 pack: sp, :char, :rep, :sub = string
 
 
 hkdf_extract = (salt="", ikm) ->
-  salt = rep "\0", 64 if salt == ""
-  hmac sha256, salt, ikm
+  -- RFC5869: if salt is not provided, it is set to a string of HashLen zeros.
+  -- For SHA256, HashLen is 32 bytes.
+  -- The sha2.lua hmac might handle key padding; if not, explicit padding might be needed if key > blocksize.
+  -- Assuming salt is key material, not the HMAC key directly if it's longer than blocksize.
+  -- For HKDF, salt is typically shorter than or equal to block size.
+  salt = rep "\0", 32 if salt == "" -- Default salt to 32 zero bytes for SHA256 (HashLen)
+  -- Assuming hmac from sha2.lua now returns binary
+  hmac sha256, salt, ikm -- This will be a binary PRK
 
 
 hkdf_expand = (prk, info="", len) ->
-  prk = hex_to_bin prk
-  len *= 2
+  -- prk is binary. info is binary. len is desired output length in bytes.
+  -- Function should return binary.
   i, okm, t = 1, "", ""
-  while #okm < len
-    t = hmac sha256, prk, hex_to_bin(t) .. info .. char(i)
+  -- Assuming hmac from sha2.lua now returns binary for 't'
+  while #okm < len -- Compare length of binary string okm with desired byte length len
+    t = hmac sha256, prk, t .. info .. char(i) -- 't' from previous iteration is binary
     okm ..= t
     i += 1
-  sub okm, 1, len
+  sub okm, 1, len -- Return 'len' binary bytes
 
 
 hkdf = (salt, ikm, info, len) ->
+  -- All inputs (salt, ikm, info) are binary. len is in bytes. Returns binary.
   hkdf_expand hkdf_extract(salt, ikm), info, len
 
 
 hkdf_expand_label = (prk, label, context, len) ->
+  -- prk is binary. label is string. context is binary. len is in bytes. Returns binary.
   hkdf_expand prk, sp(">Hs1s1", len, "tls13 "..label, context), len
 
 
@@ -39,25 +48,31 @@ test = ->
     hex_to_bin"0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
     hex_to_bin"f0f1f2f3f4f5f6f7f8f9"
     42
-  ) == "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
+  -- Expected result is binary
+  ) == hex_to_bin "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
 
   assert hkdf(
     hex_to_bin"606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeaf"
     hex_to_bin"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f"
     hex_to_bin"b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
     82
-  ) == "b11e398dc80327a1c8e7f78c596a49344f012eda2d4efad8a050cc4c19afa97c59045a99cac7827271cb41c65e590e09da3275600c2f09b8367793a9aca3db71cc30c58179ec3e87c14c01d5c1f3434f1d87"
+  -- Expected result is binary
+  ) == hex_to_bin "b11e398dc80327a1c8e7f78c596a49344f012eda2d4efad8a050cc4c19afa97c59045a99cac7827271cb41c65e590e09da3275600c2f09b8367793a9aca3db71cc30c58179ec3e87c14c01d5c1f3434f1d87"
 
   assert hkdf(
     ""
     hex_to_bin"0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
     ""
     42
-  ) == "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d9d201395faa4b61a96c8"
+  -- Expected result is binary
+  ) == hex_to_bin "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d9d201395faa4b61a96c8"
 
+  -- init_secret will be binary after this call
   init_secret = hkdf_extract hex_to_bin"38762cf7f55934b34d179ae6a4c80cadccbb7f0a", hex_to_bin"0001020304050607"
+  -- csecret will be binary
   csecret = hkdf_expand_label init_secret, "client in", "", 32
-  assert hkdf_expand_label(csecret, "quic key", "", 16) == "b14b918124fda5c8d79847602fa3520b"
+  -- csecret is already binary, so no conversion needed. Expected result is binary.
+  assert hkdf_expand_label(csecret, "quic key", "", 16) == hex_to_bin "b14b918124fda5c8d79847602fa3520b"
   print "OK"
 
 
@@ -65,4 +80,9 @@ if arg[0] == script
   print "Running tests"
   test!
 
-:hkdf, :hkdf_extract, :hkdf_expand, :hkdf_expand_label, :hex_to_bin, :test
+-- Export the HKDF functions and hex/bin utilities
+{
+  :hkdf, :hkdf_extract, :hkdf_expand, :hkdf_expand_label
+  :hex_to_bin, :bin_to_hex -- Export utilities from the required module
+  :test -- Export test function
+}
