@@ -188,24 +188,21 @@ parse_crypto_frame = (payload, off=1) =>
   return nil, "Failed to decrypt payload" unless decrypted_payload
 
   -- Collect and reassemble CRYPTO frames
-  crypto_reassembler = reassembler!
-  reassembled_crypto_data = nil
-
+  crypto_frames = {}
   for frame in iter_frames decrypted_payload
     if frame.type == "CRYPTO"
-      print "DEBUG: Calling reassembler with data_len=#{#frame.data}, offset=#{frame.offset}, last=false"
-      reassembled_crypto_data = crypto_reassembler frame.data, frame.offset, false -- Not necessarily last frame
-    else
-      -- For SNI, we only care about CRYPTO frames. Other frames are ignored.
-      -- In a full parser, these would be handled or skipped based on their type/length.
-      nil
+      table.insert crypto_frames, frame
 
-  -- Mark the last frame for reassembler
-  if reassembled_crypto_data then
-    print "DEBUG: Calling reassembler with data_len=0, offset=0, last=true (end of stream)"
-    reassembled_crypto_data = crypto_reassembler "", 0, true -- Signal end of stream
+  return nil, "No CRYPTO frames found" if #crypto_frames == 0
 
-  return nil, "No reassembled CRYPTO data found" unless reassembled_crypto_data
+  crypto_reassembler = reassembler!
+  reassembled_crypto_data = nil
+  for i, frame in ipairs crypto_frames
+    -- The last frame in our collected list is the final one for the reassembler.
+    is_last_frame = (i == #crypto_frames)
+    reassembled_crypto_data = crypto_reassembler(frame.data, frame.offset, is_last_frame)
+
+  return nil, "Failed to reassemble CRYPTO data" unless reassembled_crypto_data
 
   sni, err = extract_sni_from_crypto reassembled_crypto_data
   return nil, err or "No SNI found" unless sni
