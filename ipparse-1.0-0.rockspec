@@ -1,8 +1,8 @@
 package = "ipparse"
 version = "1.0-0"
 source = {
-   url = "git+https://github.com/luainkernel/moontastik",
-   dir = "ipparse"
+   url = "git+https://github.com/jperon/moontastik",
+   branch = "master"
 }
 description = {
    summary = "Library to parse network packets",
